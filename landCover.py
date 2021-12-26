@@ -49,6 +49,8 @@ print('F1 score - Test dataset: {}'.format(f1_score(y_test, y_pred, average= Non
 ds = gdal.Open(r'.\dataImage.tif', gdal.GA_ReadOnly)
 data = ds.ReadAsArray()
 bands, rows, cols = data.shape
+print(rows)
+print(cols)
 
 rsl = []
 for i in range(rows):
