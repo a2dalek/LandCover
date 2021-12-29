@@ -5,6 +5,7 @@ import seaborn as sns
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score
 from sklearn.metrics import f1_score
+from sklearn.metrics import confusion_matrix
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.neural_network import MLPClassifier
@@ -33,7 +34,7 @@ y = train.filter(['Label'])
 
 X_train, X_test, y_train, y_test = train_test_split(X, y, train_size=.8)
 
-clf = RandomForestClassifier(n_estimators=200, max_depth= 14, min_samples_split= 4)
+clf = RandomForestClassifier(n_estimators=200, max_depth= 18, min_samples_split= 4)
 
 # clf = KNeighborsClassifier(leaf_size=30)
 
@@ -44,7 +45,13 @@ clf = RandomForestClassifier(n_estimators=200, max_depth= 14, min_samples_split=
 clf.fit(X_train, y_train)
 y_pred=clf.predict(X_test)
 print('Accuracy score - Test dataset: {}'.format(accuracy_score(y_test, y_pred)))
-print('F1 score - Test dataset: {}'.format(f1_score(y_test, y_pred, average= None)))
+print('F1 score - Test dataset: {}'.format(f1_score(y_test, y_pred, average= 'macro')))
+cm=confusion_matrix(y_test,y_pred)
+f, ax=plt.subplots(figsize=(5,5))
+sns.heatmap(cm,annot=True,linewidths=0.5,linecolor="red",fmt=".0f",ax=ax)
+plt.xlabel("y_pred")
+plt.ylabel("y_test")
+plt.show()
 
 ds = gdal.Open(r'.\dataImage.tif', gdal.GA_ReadOnly)
 data = ds.ReadAsArray()
@@ -66,7 +73,9 @@ map_df = pd.read_csv(r'.\map.csv')
 map_df["NDVI"] = (map_df["Band 4"] - map_df["Band 1"])/(map_df["Band 4"] + map_df["Band 1"])
 map_df["NDWI"] = (map_df["Band 2"] - map_df["Band 4"])/(map_df["Band 4"] + map_df["Band 2"])
 
+
 tmp = map_df.filter(attributes)
+
 map_df['pred'] = clf.predict(tmp)
 map_df = map_df[['rows', 'cols', 'pred']]
 
