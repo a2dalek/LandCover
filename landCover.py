@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
+from sklearn.metrics.pairwise import euclidean_distances
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score
 from sklearn.metrics import f1_score
@@ -11,11 +12,14 @@ from sklearn.neighbors import KNeighborsClassifier
 from sklearn.neural_network import MLPClassifier
 from sklearn.model_selection import StratifiedGroupKFold
 from sklearn.svm import SVC
-
+from sklearn.experimental import enable_halving_search_cv
+from sklearn.model_selection import HalvingGridSearchCV
 from osgeo import gdal
 
+# List of attributes which are used
 attributes = ['Band 1', 'Band 2', 'Band 3', 'NDVI', 'NDWI']
 
+# List of labels
 labelId = {
     "Residential Land": 1,
     "Rice Paddies": 2,
@@ -28,22 +32,78 @@ labelId = {
     "Aquaculture": 9,
 }
 
+# Read the samples file
 train=pd.read_csv("./train.csv")
 X = train.filter(attributes)
 y = train.filter(['Label'])
 
-X_train, X_test, y_train, y_test = train_test_split(X, y, train_size=.8)
+# split samples file into train set and test set
+X_train, X_test, y_train, y_test = train_test_split(X, y, train_size=.8, stratify=y)
 
-clf = RandomForestClassifier(n_estimators=200, max_depth= 18, min_samples_split= 4)
+# --------------Random forest model---------------
+param_grid = {
+    'max_depth': range(8, 15, 1),
+    'min_samples_split': range(3, 8, 1),
+}
+baseClf = RandomForestClassifier(random_state= 0)
 
-# clf = KNeighborsClassifier(leaf_size=30)
+clf = HalvingGridSearchCV(baseClf, param_grid, cv=5,
+                          factor=2).fit(X_train, y_train)
 
-# clf = MLPClassifier()
+print(clf.best_params_)
 
-# clf = SVC()
+# --------------K-Neighbors model-----------------
 
-clf.fit(X_train, y_train)
+# param_grid = {
+#     'n_neighbors': range(4, 10, 1), 
+#     'leaf_size': range(25, 40, 1), 
+#     'p': [1, 2],
+#     'weights': ['uniform', 'distance'],
+#     'metric': ['minkowski', 'chebyshev']
+# }
+
+# baseClf = KNeighborsClassifier()
+
+# clf = HalvingGridSearchCV(baseClf, param_grid, cv=5,
+#                           factor=2).fit(X_train, y_train)
+
+# print(clf.best_params_)
+
+# ----------------------MLP model----------------------
+# param_grid = {
+#     'hidden_layer_sizes': [(50,50,50), (50,100,50), (25, 60, 60), (100,)],
+#     'activation': ['tanh', 'relu'],
+#     'solver': ['sgd', 'adam'],
+#     'alpha': [0.0001, 0.05],
+#     'learning_rate': ['constant','adaptive'],
+# }
+
+# baseClf = MLPClassifier(random_state=0)
+
+# clf = HalvingGridSearchCV(baseClf, param_grid, cv=5,
+#                           factor=2).fit(X_train, y_train)
+
+# print(clf.best_params_)
+
+# -------------------SVC model-------------------- 
+# param_grid = {
+#     'C': [0.1, 1, 10, 100], 
+#     'gamma': [1, 0.1, 0.01, 0.001],
+#     'kernel': ['rbf', 'sigmoid'],
+# }
+# baseClf = SVC(random_state= 0)
+
+# clf = HalvingGridSearchCV(baseClf, param_grid, cv=5,
+#                           factor=2).fit(X_train, y_train)
+
+# print(clf.best_params_)
+
+#---------------------------------------------------
+
+# predict the test set
 y_pred=clf.predict(X_test)
+
+# show the result of the predict on test set
 print('Accuracy score - Test dataset: {}'.format(accuracy_score(y_test, y_pred)))
 print('F1 score - Test dataset: {}'.format(f1_score(y_test, y_pred, average= 'macro')))
 cm=confusion_matrix(y_test,y_pred)
@@ -53,6 +113,7 @@ plt.xlabel("y_pred")
 plt.ylabel("y_test")
 plt.show()
 
+# read the map
 ds = gdal.Open(r'.\dataImage.tif', gdal.GA_ReadOnly)
 data = ds.ReadAsArray()
 bands, rows, cols = data.shape
@@ -70,15 +131,18 @@ df.to_csv('map.csv', index=False)
 
 map_df = pd.read_csv(r'.\map.csv')
 
+# calculate NDVI and NDWI for the map
 map_df["NDVI"] = (map_df["Band 4"] - map_df["Band 1"])/(map_df["Band 4"] + map_df["Band 1"])
 map_df["NDWI"] = (map_df["Band 2"] - map_df["Band 4"])/(map_df["Band 4"] + map_df["Band 2"])
 
 
 tmp = map_df.filter(attributes)
 
+# predict the map
 map_df['pred'] = clf.predict(tmp)
-map_df = map_df[['rows', 'cols', 'pred']]
 
+# create land cover map file
+map_df = map_df[['rows', 'cols', 'pred']]
 ds = gdal.Open(r'.\dataImage.tif', gdal.GA_ReadOnly)
 data = ds.ReadAsArray()
 bands, rows, cols = data.shape
